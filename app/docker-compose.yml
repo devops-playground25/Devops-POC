@@ -1,8 +1,20 @@
-version: '3'
-services:
-  web:
-    build: .
-    ports:
-      - "8000:8000"
-    volumes:
-      - .:/app
+version: '1'
+- name: Build and run Django Docker container
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Build Docker image
+      community.docker.docker_image:
+        name: django-hello-world
+        source: build
+        build:
+          path: .
+        state: present
+
+    - name: Run Docker container
+      community.docker.docker_container:
+        name: django-container
+        image: django-hello-world
+        state: started
+        ports:
+          - "8000:8000"

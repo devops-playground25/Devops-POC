@@ -109,15 +109,12 @@ resource "aws_security_group" "web_sg" {
   }
 }
 
-resource "aws_instance" "web" {
-  ami           = "ami-091f18e98bc129c4e"
-  instance_type = "t2.micro"
-  key_name      = aws_key_pair.devops_key.key_name
-  subnet_id     = aws_subnet.devops_subnet_1.id
-  vpc_security_group_ids = [aws_security_group.web_sg.id]
+resource "aws_acm_certificate" "web_cert" {
+  domain_name       = "yourdomain.com"  # Replace with your actual domain
+  validation_method = "DNS"
 
-  tags = {
-    Name = "Terraform-EC2-Instance"
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
@@ -135,6 +132,23 @@ resource "aws_route53_record" "cert_validation" {
   type    = each.value.type
   records = [each.value.record]
   ttl     = 60
+}
+
+resource "aws_acm_certificate_validation" "web_cert_validation" {
+  certificate_arn         = aws_acm_certificate.web_cert.arn
+  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+}
+
+resource "aws_instance" "web" {
+  ami           = "ami-091f18e98bc129c4e"
+  instance_type = "t2.micro"
+  key_name      = aws_key_pair.devops_key.key_name
+  subnet_id     = aws_subnet.devops_subnet_1.id
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
+
+  tags = {
+    Name = "Terraform-EC2-Instance"
+  }
 }
 
 resource "aws_lb" "web_lb" {
