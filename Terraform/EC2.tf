@@ -109,6 +109,39 @@ resource "aws_security_group" "web_sg" {
   }
 }
 
+resource "aws_lb" "web_lb" {
+  name               = "web-load-balancer"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.web_sg.id]
+  subnets            = [aws_subnet.devops_subnet_1.id, aws_subnet.devops_subnet_2.id]
+  enable_deletion_protection = false
+}
+
+resource "aws_acm_certificate" "self_signed_cert" {
+  private_key      = tls_private_key.devops_key.private_key_pem
+  certificate_body = tls_private_key.devops_key.public_key_openssh
+  certificate_chain = tls_private_key.devops_key.public_key_openssh
+}
+
+resource "aws_lb_listener" "https" {
+  load_balancer_arn = aws_lb.web_lb.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_acm_certificate.self_signed_cert.arn
+
+  default_action {
+    type = "fixed-response"
+
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "HTTPS works!"
+      status_code  = "200"
+    }
+  }
+}
+
 resource "aws_instance" "web" {
   ami                  = "ami-091f18e98bc129c4e"
   instance_type        = "t2.micro"
