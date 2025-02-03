@@ -22,10 +22,42 @@ resource "aws_vpc" "devops_playground" {
   }
 }
 
+resource "aws_internet_gateway" "devops_igw" {
+  vpc_id = aws_vpc.devops_playground.id
+
+  tags = {
+    Name = "devops-igw"
+  }
+}
+
+resource "aws_route_table" "devops_route_table" {
+  vpc_id = aws_vpc.devops_playground.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.devops_igw.id
+  }
+
+  tags = {
+    Name = "devops-route-table"
+  }
+}
+
+resource "aws_route_table_association" "devops_subnet_1_assoc" {
+  subnet_id      = aws_subnet.devops_subnet_1.id
+  route_table_id = aws_route_table.devops_route_table.id
+}
+
+resource "aws_route_table_association" "devops_subnet_2_assoc" {
+  subnet_id      = aws_subnet.devops_subnet_2.id
+  route_table_id = aws_route_table.devops_route_table.id
+}
+
 resource "aws_subnet" "devops_subnet_1" {
   vpc_id            = aws_vpc.devops_playground.id
   cidr_block        = "10.0.1.0/24"
   availability_zone = "eu-west-2a"
+  map_public_ip_on_launch = true
 
   tags = {
     Name = "devops-subnet-1"
@@ -36,47 +68,37 @@ resource "aws_subnet" "devops_subnet_2" {
   vpc_id            = aws_vpc.devops_playground.id
   cidr_block        = "10.0.2.0/24"
   availability_zone = "eu-west-2b"
+  map_public_ip_on_launch = true
 
   tags = {
     Name = "devops-subnet-2"
   }
 }
 
-resource "aws_instance" "web" {
-  ami           = "ami-091f18e98bc129c4e"  # Updated with the specified AMI ID
-  instance_type = "t2.micro"
-  key_name      = aws_key_pair.devops_key.key_name
-  subnet_id     = aws_subnet.devops_subnet_1.id
-  vpc_security_group_ids = [aws_security_group.web_sg.id]
-
-  tags = {
-    Name = "Terraform-EC2-Instance"
-  }
-}
-
 resource "aws_security_group" "web_sg" {
   name        = "web-sg"
   description = "Allow inbound SSH, HTTP, and HTTPS"
+  vpc_id      = aws_vpc.devops_playground.id
 
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Allow SSH from anywhere (change for security)
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Allow HTTP from anywhere
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Allow HTTPS from anywhere
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -87,12 +109,15 @@ resource "aws_security_group" "web_sg" {
   }
 }
 
-resource "aws_acm_certificate" "web_cert" {
-  domain_name       = "yourdomain.com"  # Replace with your actual domain
-  validation_method = "DNS"
+resource "aws_instance" "web" {
+  ami           = "ami-091f18e98bc129c4e"
+  instance_type = "t2.micro"
+  key_name      = aws_key_pair.devops_key.key_name
+  subnet_id     = aws_subnet.devops_subnet_1.id
+  vpc_security_group_ids = [aws_security_group.web_sg.id]
 
-  lifecycle {
-    create_before_destroy = true
+  tags = {
+    Name = "Terraform-EC2-Instance"
   }
 }
 
@@ -105,16 +130,11 @@ resource "aws_route53_record" "cert_validation" {
     }
   }
 
-  zone_id = "your-actual-route53-zone-id"  # Replace with your actual Route 53 hosted zone ID
+  zone_id = "actual-route53-zone-id"
   name    = each.value.name
   type    = each.value.type
   records = [each.value.record]
   ttl     = 60
-}
-
-resource "aws_acm_certificate_validation" "web_cert_validation" {
-  certificate_arn         = aws_acm_certificate.web_cert.arn
-  validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
 }
 
 resource "aws_lb" "web_lb" {
@@ -123,45 +143,7 @@ resource "aws_lb" "web_lb" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.web_sg.id]
   subnets            = [aws_subnet.devops_subnet_1.id, aws_subnet.devops_subnet_2.id]
-
   enable_deletion_protection = false
-}
-
-resource "aws_lb_target_group" "web_tg" {
-  name     = "web-target-group"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.devops_playground.id
-}
-
-resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.web_lb.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.web_tg.arn
-  }
-}
-
-resource "aws_lb_listener" "https" {
-  load_balancer_arn = aws_lb.web_lb.arn
-  port              = 443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-2016-08"
-  certificate_arn   = aws_acm_certificate_validation.web_cert_validation.certificate_arn
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.web_tg.arn
-  }
-}
-
-resource "aws_lb_target_group_attachment" "web_attach" {
-  target_group_arn = aws_lb_target_group.web_tg.arn
-  target_id        = aws_instance.web.id
-  port             = 80
 }
 
 output "private_key" {
