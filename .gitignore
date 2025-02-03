@@ -1,0 +1,5 @@
+# Ignore Terraform working directories and providers
+.terraform/
+.terraform.lock.hcl
+terraform.exe
+*.exe
