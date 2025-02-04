@@ -2,15 +2,23 @@
 - name: Deploy app.py to AWS ECR
   hosts: localhost
   gather_facts: no
+  collections:
+    - amazon.aws
   vars:
     aws_region: "eu-west-2"
     repository_name: "devops-playground"
     image_tag: "latest"
+    account_id: "597088025647"
+    ecr_uri: "{{ account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ repository_name }}"
     app_directory: "{{ playbook_dir }}/app"
   tasks:
 
-    - name: Create ECR repository
-      amazon.aws.ec2_ecr:
+    - name: Ensure AWS collection is installed
+      command: ansible-galaxy collection install amazon.aws --force
+      changed_when: false
+
+    - name: Create or Retrieve ECR repository
+      community.aws.ecs_ecr:
         name: "{{ repository_name }}"
         region: "{{ aws_region }}"
         state: present
@@ -18,15 +26,17 @@
 
     - name: Authenticate Docker with AWS ECR
       shell: |
-        aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin {{ ecr_repo.repository.repositoryUri }}
+        aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin {{ ecr_uri }}
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+        AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
 
     - name: Build Docker image
-      community.docker.docker_image:
-        build:
-          path: "{{ app_directory }}"
-        name: "{{ ecr_repo.repository.repositoryUri }}"
-        tag: "{{ image_tag }}"
+      shell: |
+        docker build -t {{ repository_name }}:{{ image_tag }} {{ app_directory }}
+        docker tag {{ repository_name }}:{{ image_tag }} {{ ecr_uri }}:{{ image_tag }}
 
     - name: Push Docker image to ECR
       shell: |
-        docker push {{ ecr_repo.repository.repositoryUri }}:{{ image_tag }}
+        docker push {{ ecr_uri }}:{{ image_tag }}
