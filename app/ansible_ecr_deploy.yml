@@ -1,0 +1,32 @@
+---
+- name: Deploy app.py to AWS ECR
+  hosts: localhost
+  gather_facts: no
+  vars:
+    aws_region: "eu-west-2"
+    repository_name: "devops-playground"
+    image_tag: "latest"
+    app_directory: "{{ playbook_dir }}/app"
+  tasks:
+
+    - name: Create ECR repository
+      amazon.aws.ec2_ecr:
+        name: "{{ repository_name }}"
+        region: "{{ aws_region }}"
+        state: present
+      register: ecr_repo
+
+    - name: Authenticate Docker with AWS ECR
+      shell: |
+        aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin {{ ecr_repo.repository.repositoryUri }}
+
+    - name: Build Docker image
+      community.docker.docker_image:
+        build:
+          path: "{{ app_directory }}"
+        name: "{{ ecr_repo.repository.repositoryUri }}"
+        tag: "{{ image_tag }}"
+
+    - name: Push Docker image to ECR
+      shell: |
+        docker push {{ ecr_repo.repository.repositoryUri }}:{{ image_tag }}
