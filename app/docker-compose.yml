@@ -17,4 +17,4 @@ version: '1'
         image: django-hello-world
         state: started
         ports:
-          - "8000:8000"
+          - "443:443"

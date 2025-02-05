@@ -30,4 +30,4 @@ application = get_wsgi_application()
 
 if application == "app":
     logging.debug("Starting Django app")
-    execute_from_command_line([sys.argv[0], 'runserver', '0.0.0.0:8000'])
+    execute_from_command_line([sys.argv[0], 'runserver', '0.0.0.0:443'])
