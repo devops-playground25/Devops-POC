@@ -5,3 +5,5 @@ terraform.exe
 *.exe
 ansible-env/
 __pycache__/
+Terraform\terraform.tfstate
+Terraform\terraform.tfstate.backup
