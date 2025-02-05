@@ -2,31 +2,23 @@ provider "aws" {
   region = "eu-west-2"
 }
 
-resource "tls_private_key" "self_signed_key" {
+resource "tls_private_key" "devops_key" {
   algorithm = "RSA"
   rsa_bits  = 2048
 }
 
-resource "tls_self_signed_cert" "self_signed_cert" {
-  private_key_pem = tls_private_key.self_signed_key.private_key_pem
-
-  subject {
-    common_name  = "test.example.com"
-    organization = "Test Organization"
-  }
-
-  validity_period_hours = 8760
-  allowed_uses = [
-    "key_encipherment",
-    "digital_signature",
-    "server_auth"
-  ]
+resource "aws_key_pair" "devops_key" {
+  key_name   = "devops-key"
+  public_key = tls_private_key.devops_key.public_key_openssh
 }
 
 resource "aws_acm_certificate" "alb_cert" {
-  private_key      = tls_private_key.self_signed_key.private_key_pem
-  certificate_body = tls_self_signed_cert.cert_pem
-  certificate_chain = tls_self_signed_cert.cert_pem
+  domain_name       = "yourdomain.com"
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_vpc" "devops_playground" {
@@ -105,13 +97,6 @@ resource "aws_security_group" "web_sg" {
   }
 
   ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -166,6 +151,6 @@ resource "aws_instance" "web" {
 }
 
 output "private_key" {
-  value     = tls_private_key.self_signed_key.private_key_pem
+  value     = tls_private_key.devops_key.private_key_pem
   sensitive = true
 }
