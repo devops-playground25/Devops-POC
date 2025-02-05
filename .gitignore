@@ -4,3 +4,4 @@
 terraform.exe
 *.exe
 ansible-env/
+__pycache__/
